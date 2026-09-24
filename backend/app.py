@@ -107,12 +107,11 @@ def login():
 
     user = cursor.execute(
         """
-        SELECT * FROM users
-        WHERE (email = ? OR mobile = ?) AND password = ?
+        ...
+        WHERE (email = %s OR mobile = %s) AND password = %s
         """,
         (identifier, identifier, password)
     ).fetchone()
-
     connection.close()
 
     if user:
