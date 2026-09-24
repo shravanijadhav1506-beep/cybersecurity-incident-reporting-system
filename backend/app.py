@@ -1,19 +1,30 @@
 from flask import Flask, request
 from database import create_tables, get_connection
-import sqlite3
 from dotenv import load_dotenv
 import os
+import smtplib
+from email.mime.text import MIMEText
+import psycopg2
+
 
 app = Flask(__name__)
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
+
+# Load environment variables
+load_dotenv(
+    os.path.join(os.path.dirname(__file__), ".env"),
+    override=True
+)
 
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
+
+# --------------------------------------------------
+# SEND CONFIRMATION EMAIL
+# --------------------------------------------------
+
 def send_confirmation_email(to_email, incident_id):
-    import smtplib
-    from email.mime.text import MIMEText
 
     subject = "Incident Report Submitted Successfully"
 
@@ -36,9 +47,19 @@ This is an automated confirmation email.
     message["To"] = to_email
 
     try:
-        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+        with smtplib.SMTP(
+            "smtp.gmail.com",
+            587,
+            timeout=10
+        ) as server:
+
             server.starttls()
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+
+            server.login(
+                EMAIL_ADDRESS,
+                EMAIL_PASSWORD
+            )
+
             server.sendmail(
                 EMAIL_ADDRESS,
                 to_email,
@@ -50,15 +71,30 @@ This is an automated confirmation email.
     except Exception as e:
         print("Email sending failed:", e)
 
+
+# --------------------------------------------------
+# CREATE TABLES
+# --------------------------------------------------
+
 create_tables()
 
+
+# --------------------------------------------------
+# HOME
+# --------------------------------------------------
 
 @app.route("/")
 def home():
     return "Cybersecurity Incident Reporting System Backend is Running!"
 
+
+# --------------------------------------------------
+# REGISTER
+# --------------------------------------------------
+
 @app.route("/register", methods=["POST"])
 def register():
+
     data = request.get_json()
 
     name = data.get("name")
@@ -67,54 +103,94 @@ def register():
     password = data.get("password")
 
     if not name or not email or not mobile or not password:
-        return {"message": "All fields are required"}, 400
+        return {
+            "message": "All fields are required"
+        }, 400
 
     connection = get_connection()
     cursor = connection.cursor()
 
     try:
+
         cursor.execute(
             """
-            INSERT INTO users (name, email, mobile, password)
-            VALUES (?, ?, ?, ?)
-            """,
+            INSERT INTO users
             (name, email, mobile, password)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (
+                name,
+                email,
+                mobile,
+                password
+            )
         )
 
         connection.commit()
 
-        return {"message": "Registration successful"}, 201
+        return {
+            "message": "Registration successful"
+        }, 201
 
-    except sqlite3.IntegrityError:
-        return {"message": "Email already registered"}, 409
+    except psycopg2.IntegrityError:
+
+        connection.rollback()
+
+        return {
+            "message": "Email or mobile already registered"
+        }, 409
 
     finally:
+
+        cursor.close()
         connection.close()
 
 
+# --------------------------------------------------
+# LOGIN
+# --------------------------------------------------
+
 @app.route("/login", methods=["POST"])
 def login():
+
     data = request.get_json()
 
     identifier = data.get("identifier")
     password = data.get("password")
 
     if not identifier or not password:
-        return {"message": "Email/mobile and password are required"}, 400
+        return {
+            "message": "Email/mobile and password are required"
+        }, 400
 
     connection = get_connection()
     cursor = connection.cursor()
 
-    user = cursor.execute(
-        """
-        ...
-        WHERE (email = %s OR mobile = %s) AND password = %s
-        """,
-        (identifier, identifier, password)
-    ).fetchone()
-    connection.close()
+    try:
+
+        cursor.execute(
+            """
+            SELECT *
+            FROM users
+            WHERE (email = %s OR mobile = %s)
+            AND password = %s
+            """,
+            (
+                identifier,
+                identifier,
+                password
+            )
+        )
+
+        user = cursor.fetchone()
+
+    finally:
+
+        cursor.close()
+        connection.close()
 
     if user:
+
         return {
             "message": "Login successful",
             "name": user["name"],
@@ -122,73 +198,136 @@ def login():
             "mobile": user["mobile"]
         }, 200
 
-    return {"message": "Invalid email/mobile or password"}, 401
+    return {
+        "message": "Invalid email/mobile or password"
+    }, 401
+
+
+# --------------------------------------------------
+# FORGOT PASSWORD
+# --------------------------------------------------
+
 @app.route("/forgot-password", methods=["POST"])
 def forgot_password():
+
     data = request.get_json()
 
     identifier = data.get("identifier")
 
     if not identifier:
-        return {"message": "Email or mobile number is required"}, 400
+        return {
+            "message": "Email or mobile number is required"
+        }, 400
 
     connection = get_connection()
     cursor = connection.cursor()
 
-    user = cursor.execute(
-        """
-        SELECT * FROM users
-        WHERE email = ? OR mobile = ?
-        """,
-        (identifier, identifier)
-    ).fetchone()
+    try:
 
-    connection.close()
+        cursor.execute(
+            """
+            SELECT *
+            FROM users
+            WHERE email = %s OR mobile = %s
+            """,
+            (
+                identifier,
+                identifier
+            )
+        )
+
+        user = cursor.fetchone()
+
+    finally:
+
+        cursor.close()
+        connection.close()
 
     if user:
-        return {"message": "User found. You can reset your password."}, 200
 
-    return {"message": "No account found with this email or mobile number"}, 404
+        return {
+            "message": "User found. You can reset your password."
+        }, 200
+
+    return {
+        "message": "No account found with this email or mobile number"
+    }, 404
+
+
+# --------------------------------------------------
+# RESET PASSWORD
+# --------------------------------------------------
+
 @app.route("/reset-password", methods=["POST"])
 def reset_password():
+
     data = request.get_json()
 
     identifier = data.get("identifier")
     new_password = data.get("new_password")
 
     if not identifier or not new_password:
-        return {"message": "Email/mobile and new password are required"}, 400
+        return {
+            "message": "Email/mobile and new password are required"
+        }, 400
 
     connection = get_connection()
     cursor = connection.cursor()
 
-    user = cursor.execute(
-        """
-        SELECT * FROM users
-        WHERE email = ? OR mobile = ?
-        """,
-        (identifier, identifier)
-    ).fetchone()
+    try:
 
-    if not user:
+        cursor.execute(
+            """
+            SELECT *
+            FROM users
+            WHERE email = %s OR mobile = %s
+            """,
+            (
+                identifier,
+                identifier
+            )
+        )
+
+        user = cursor.fetchone()
+
+        if not user:
+
+            return {
+                "message": "No account found with this email or mobile number"
+            }, 404
+
+        cursor.execute(
+            """
+            UPDATE users
+            SET password = %s
+            WHERE email = %s OR mobile = %s
+            """,
+            (
+                new_password,
+                identifier,
+                identifier
+            )
+        )
+
+        connection.commit()
+
+        return {
+            "message": "Password reset successful"
+        }, 200
+
+    finally:
+
+        cursor.close()
         connection.close()
-        return {"message": "No account found with this email or mobile number"}, 404
 
-    cursor.execute(
-        """
-        UPDATE users
-        SET password = ?
-        WHERE email = ? OR mobile = ?
-        """,
-        (new_password, identifier, identifier)
-    )
 
-    connection.commit()
-    connection.close()
+# --------------------------------------------------
+# CREATE INCIDENT REPORT
+# --------------------------------------------------
 
-    return {"message": "Password reset successful"}, 200
 @app.route("/reports", methods=["POST"])
 def create_report():
+
     data = request.get_json()
 
     incident_id = data.get("incident_id")
@@ -200,6 +339,7 @@ def create_report():
     time = data.get("time")
     description = data.get("description")
     severity = data.get("severity")
+
     status = "Pending"
 
     if not all([
@@ -213,15 +353,20 @@ def create_report():
         description,
         severity
     ]):
-        return {"message": "All fields are required"}, 400
+
+        return {
+            "message": "All fields are required"
+        }, 400
 
     connection = get_connection()
     cursor = connection.cursor()
 
     try:
+
         cursor.execute(
             """
-            INSERT INTO reports (
+            INSERT INTO reports
+            (
                 incident_id,
                 full_name,
                 email,
@@ -233,7 +378,8 @@ def create_report():
                 severity,
                 status
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 incident_id,
@@ -251,95 +397,180 @@ def create_report():
 
         connection.commit()
 
-        send_confirmation_email(email, incident_id)
+        # Send confirmation email
+        send_confirmation_email(
+            email,
+            incident_id
+        )
 
         return {
             "message": "Incident report submitted successfully",
             "incident_id": incident_id
         }, 201
 
-    except sqlite3.IntegrityError:
-        return {"message": "Incident ID already exists"}, 409
+    except psycopg2.IntegrityError:
+
+        connection.rollback()
+
+        return {
+            "message": "Incident ID already exists"
+        }, 409
 
     finally:
+
+        cursor.close()
         connection.close()
+
+
+# --------------------------------------------------
+# GET ALL REPORTS
+# --------------------------------------------------
+
 @app.route("/reports", methods=["GET"])
 def get_all_reports():
+
     connection = get_connection()
     cursor = connection.cursor()
 
-    reports = cursor.execute(
-        """
-        SELECT * FROM reports
-        ORDER BY id DESC
-        """
-    ).fetchall()
+    try:
 
-    connection.close()
+        cursor.execute(
+            """
+            SELECT *
+            FROM reports
+            ORDER BY id DESC
+            """
+        )
+
+        reports = cursor.fetchall()
+
+    finally:
+
+        cursor.close()
+        connection.close()
 
     return {
-        "reports": [dict(report) for report in reports]
+        "reports": [
+            dict(report)
+            for report in reports
+        ]
     }, 200
+
+
+# --------------------------------------------------
+# GET REPORTS OF ONE USER
+# --------------------------------------------------
 
 @app.route("/reports/user/<email>", methods=["GET"])
 def get_user_reports(email):
+
     connection = get_connection()
     cursor = connection.cursor()
 
-    reports = cursor.execute(
-        """
-        SELECT * FROM reports
-        WHERE email = ?
-        ORDER BY id DESC
-        """,
-        (email,)
-    ).fetchall()
+    try:
 
-    connection.close()
+        cursor.execute(
+            """
+            SELECT *
+            FROM reports
+            WHERE email = %s
+            ORDER BY id DESC
+            """,
+            (email,)
+        )
+
+        reports = cursor.fetchall()
+
+    finally:
+
+        cursor.close()
+        connection.close()
 
     return {
-        "reports": [dict(report) for report in reports]
+        "reports": [
+            dict(report)
+            for report in reports
+        ]
     }, 200
+
+
+# --------------------------------------------------
+# UPDATE REPORT STATUS
+# --------------------------------------------------
+
 @app.route("/reports/<incident_id>/status", methods=["PUT"])
 def update_report_status(incident_id):
+
     data = request.get_json()
 
     status = data.get("status")
 
-    if status not in ["Pending", "Investigating", "Resolved"]:
-        return {"message": "Invalid status"}, 400
+    if status not in [
+        "Pending",
+        "Investigating",
+        "Resolved"
+    ]:
+
+        return {
+            "message": "Invalid status"
+        }, 400
 
     connection = get_connection()
     cursor = connection.cursor()
 
-    report = cursor.execute(
-        """
-        SELECT * FROM reports
-        WHERE incident_id = ?
-        """,
-        (incident_id,)
-    ).fetchone()
+    try:
 
-    if not report:
+        cursor.execute(
+            """
+            SELECT *
+            FROM reports
+            WHERE incident_id = %s
+            """,
+            (incident_id,)
+        )
+
+        report = cursor.fetchone()
+
+        if not report:
+
+            return {
+                "message": "Report not found"
+            }, 404
+
+        cursor.execute(
+            """
+            UPDATE reports
+            SET status = %s
+            WHERE incident_id = %s
+            """,
+            (
+                status,
+                incident_id
+            )
+        )
+
+        connection.commit()
+
+        return {
+            "message": "Report status updated successfully",
+            "incident_id": incident_id,
+            "status": status
+        }, 200
+
+    finally:
+
+        cursor.close()
         connection.close()
-        return {"message": "Report not found"}, 404
 
-    cursor.execute(
-        """
-        UPDATE reports
-        SET status = ?
-        WHERE incident_id = ?
-        """,
-        (status, incident_id)
-    )
 
-    connection.commit()
-    connection.close()
+# --------------------------------------------------
+# RUN APPLICATION
+# --------------------------------------------------
 
-    return {
-        "message": "Report status updated successfully",
-        "incident_id": incident_id,
-        "status": status
-    }, 200
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+
+    app.run(
+        host="0.0.0.0",
+        port=5000,
+        debug=True
+    )
