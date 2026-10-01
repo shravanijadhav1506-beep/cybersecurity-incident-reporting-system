@@ -5,12 +5,16 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 import psycopg2
+from psycopg2.extras import RealDictCursor
 
 
 app = Flask(__name__)
 
 
-# Load environment variables
+# --------------------------------------------------
+# LOAD ENVIRONMENT VARIABLES
+# --------------------------------------------------
+
 load_dotenv(
     os.path.join(os.path.dirname(__file__), ".env"),
     override=True
@@ -108,7 +112,7 @@ def register():
         }, 400
 
     connection = get_connection()
-    cursor = connection.cursor()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
 
@@ -164,7 +168,7 @@ def login():
         }, 400
 
     connection = get_connection()
-    cursor = connection.cursor()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
 
@@ -220,7 +224,7 @@ def forgot_password():
         }, 400
 
     connection = get_connection()
-    cursor = connection.cursor()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
 
@@ -272,7 +276,7 @@ def reset_password():
         }, 400
 
     connection = get_connection()
-    cursor = connection.cursor()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
 
@@ -359,7 +363,7 @@ def create_report():
         }, 400
 
     connection = get_connection()
-    cursor = connection.cursor()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
 
@@ -430,7 +434,7 @@ def create_report():
 def get_all_reports():
 
     connection = get_connection()
-    cursor = connection.cursor()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
 
@@ -465,7 +469,7 @@ def get_all_reports():
 def get_user_reports(email):
 
     connection = get_connection()
-    cursor = connection.cursor()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
 
@@ -516,7 +520,7 @@ def update_report_status(incident_id):
         }, 400
 
     connection = get_connection()
-    cursor = connection.cursor()
+    cursor = connection.cursor(cursor_factory=RealDictCursor)
 
     try:
 
