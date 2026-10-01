@@ -2,7 +2,8 @@ from flask import Flask, request
 from database import create_tables, get_connection
 from dotenv import load_dotenv
 import os
-import resend
+import smtplib
+from email.mime.text import MIMEText
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -19,10 +20,9 @@ load_dotenv(
     override=True
 )
 
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-
-if RESEND_API_KEY:
-    resend.api_key = RESEND_API_KEY
+BREVO_SMTP_LOGIN = os.getenv("BREVO_SMTP_LOGIN")
+BREVO_SMTP_KEY = os.getenv("BREVO_SMTP_KEY")
+BREVO_SENDER_EMAIL = os.getenv("BREVO_SENDER_EMAIL")
 
 
 # --------------------------------------------------
@@ -33,56 +33,55 @@ def send_confirmation_email(to_email, incident_id):
 
     subject = "Incident Report Submitted Successfully"
 
-    html_body = f"""
-    <html>
-    <body>
+    body = f"""
+Hello,
 
-        <h2>Incident Report Submitted Successfully</h2>
+Your cybersecurity incident report has been successfully registered.
 
-        <p>Hello,</p>
+Incident ID: {incident_id}
+Status: Pending
 
-        <p>
-            Your cybersecurity incident report has been successfully registered.
-        </p>
+Thank you for using the Cybersecurity Incident Reporting System.
 
-        <p>
-            <strong>Incident ID:</strong> {incident_id}<br>
-            <strong>Status:</strong> Pending
-        </p>
-
-        <p>
-            Thank you for using the Cybersecurity Incident Reporting System.
-        </p>
-
-        <p>
-            This is an automated confirmation email.
-        </p>
-
-    </body>
-    </html>
-    """
+This is an automated confirmation email.
+"""
 
     try:
 
-        if not RESEND_API_KEY:
+        if not BREVO_SMTP_LOGIN or not BREVO_SMTP_KEY or not BREVO_SENDER_EMAIL:
 
             print(
-                "Email sending failed: RESEND_API_KEY is not configured."
+                "Email sending failed: Brevo SMTP settings are not configured."
             )
 
             return
 
-        params = {
-            "from": "onboarding@resend.dev",
-            "to": [to_email],
-            "subject": subject,
-            "html": html_body
-        }
+        message = MIMEText(body)
 
-        email = resend.Emails.send(params)
+        message["Subject"] = subject
+        message["From"] = BREVO_SENDER_EMAIL
+        message["To"] = to_email
+
+        with smtplib.SMTP(
+            "smtp-relay.brevo.com",
+            587,
+            timeout=20
+        ) as server:
+
+            server.starttls()
+
+            server.login(
+                BREVO_SMTP_LOGIN,
+                BREVO_SMTP_KEY
+            )
+
+            server.sendmail(
+                BREVO_SENDER_EMAIL,
+                to_email,
+                message.as_string()
+            )
 
         print("Confirmation email sent successfully.")
-        print("Resend response:", email)
 
     except Exception as e:
 
