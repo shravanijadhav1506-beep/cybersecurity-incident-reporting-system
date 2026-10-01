@@ -2,8 +2,7 @@ from flask import Flask, request
 from database import create_tables, get_connection
 from dotenv import load_dotenv
 import os
-import smtplib
-from email.mime.text import MIMEText
+import resend
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -20,8 +19,10 @@ load_dotenv(
     override=True
 )
 
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+
+if RESEND_API_KEY:
+    resend.api_key = RESEND_API_KEY
 
 
 # --------------------------------------------------
@@ -32,47 +33,59 @@ def send_confirmation_email(to_email, incident_id):
 
     subject = "Incident Report Submitted Successfully"
 
-    body = f"""
-Hello,
+    html_body = f"""
+    <html>
+    <body>
 
-Your cybersecurity incident report has been successfully registered.
+        <h2>Incident Report Submitted Successfully</h2>
 
-Incident ID: {incident_id}
-Status: Pending
+        <p>Hello,</p>
 
-Thank you for using the Cybersecurity Incident Reporting System.
+        <p>
+            Your cybersecurity incident report has been successfully registered.
+        </p>
 
-This is an automated confirmation email.
-"""
+        <p>
+            <strong>Incident ID:</strong> {incident_id}<br>
+            <strong>Status:</strong> Pending
+        </p>
 
-    message = MIMEText(body)
-    message["Subject"] = subject
-    message["From"] = EMAIL_ADDRESS
-    message["To"] = to_email
+        <p>
+            Thank you for using the Cybersecurity Incident Reporting System.
+        </p>
+
+        <p>
+            This is an automated confirmation email.
+        </p>
+
+    </body>
+    </html>
+    """
 
     try:
-        with smtplib.SMTP(
-            "smtp.gmail.com",
-            587,
-            timeout=10
-        ) as server:
 
-            server.starttls()
+        if not RESEND_API_KEY:
 
-            server.login(
-                EMAIL_ADDRESS,
-                EMAIL_PASSWORD
+            print(
+                "Email sending failed: RESEND_API_KEY is not configured."
             )
 
-            server.sendmail(
-                EMAIL_ADDRESS,
-                to_email,
-                message.as_string()
-            )
+            return
+
+        params = {
+            "from": "onboarding@resend.dev",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_body
+        }
+
+        email = resend.Emails.send(params)
 
         print("Confirmation email sent successfully.")
+        print("Resend response:", email)
 
     except Exception as e:
+
         print("Email sending failed:", e)
 
 
@@ -89,6 +102,7 @@ create_tables()
 
 @app.route("/")
 def home():
+
     return "Cybersecurity Incident Reporting System Backend is Running!"
 
 
@@ -107,6 +121,7 @@ def register():
     password = data.get("password")
 
     if not name or not email or not mobile or not password:
+
         return {
             "message": "All fields are required"
         }, 400
@@ -163,6 +178,7 @@ def login():
     password = data.get("password")
 
     if not identifier or not password:
+
         return {
             "message": "Email/mobile and password are required"
         }, 400
@@ -219,6 +235,7 @@ def forgot_password():
     identifier = data.get("identifier")
 
     if not identifier:
+
         return {
             "message": "Email or mobile number is required"
         }, 400
@@ -271,6 +288,7 @@ def reset_password():
     new_password = data.get("new_password")
 
     if not identifier or not new_password:
+
         return {
             "message": "Email/mobile and new password are required"
         }, 400
