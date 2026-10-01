@@ -64,7 +64,7 @@ This is an automated confirmation email.
 
         with smtplib.SMTP(
             "smtp-relay.brevo.com",
-            587,
+            2525,
             timeout=20
         ) as server:
 
