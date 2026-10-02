@@ -1,4 +1,5 @@
 from flask import Flask, request
+from flask_cors import CORS
 from database import create_tables, get_connection
 from dotenv import load_dotenv
 import os
@@ -9,6 +10,7 @@ from psycopg2.extras import RealDictCursor
 
 
 app = Flask(__name__)
+CORS(app)
 
 
 # --------------------------------------------------
