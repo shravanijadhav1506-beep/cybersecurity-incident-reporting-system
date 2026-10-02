@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/incident_model.dart';
+import '../services/api_service.dart';
 
 class ReportDetailsScreen extends StatefulWidget {
   final IncidentModel report;
@@ -194,12 +195,41 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                     child: Text("Resolved"),
                   ),
                 ],
-                onChanged: (value) {
-                  if (value != null) {
+                onChanged: (value) async {
+                  if (value == null) {
+                    return;
+                  }
+
+                  final success = await ApiService.updateReportStatus(
+                    widget.report.incidentId,
+                    value,
+                  );
+
+                  if (!mounted) {
+                    return;
+                  }
+
+                  if (success) {
                     setState(() {
                       currentStatus = value;
                       widget.report.status = value;
                     });
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          "Report status updated to $value",
+                        ),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "Failed to update report status.",
+                        ),
+                      ),
+                    );
                   }
                 },
               ),

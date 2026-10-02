@@ -93,8 +93,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
-                onTap: () {
-                  Navigator.push(
+                onTap: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => ReportDetailsScreen(
@@ -103,6 +103,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                       ),
                     ),
                   );
+
+                  loadAllReports();
                 },
                 leading: const Icon(
                   Icons.warning,

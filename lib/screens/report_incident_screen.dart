@@ -440,12 +440,13 @@ Widget build(BuildContext context) {
                   );
 
                   if (response.statusCode != 201) {
-                    final responseData = jsonDecode(response.body);
+                    print("REPORT ERROR STATUS: ${response.statusCode}");
+                    print("REPORT ERROR BODY: ${response.body}");
 
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          responseData["message"] ?? "Failed to submit incident report.",
+                          "Report failed. Server status: ${response.statusCode}",
                         ),
                       ),
                     );

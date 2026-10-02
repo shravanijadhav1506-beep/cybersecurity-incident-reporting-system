@@ -190,14 +190,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: 30),
 
             ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const AdminReportsScreen(),
                   ),
                 );
+
+                loadReportCounts();
               },
+
               icon: const Icon(Icons.list),
               label: const Text("View All Incident Reports"),
               style: ElevatedButton.styleFrom(

@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'reset_password_screen.dart';
-import '../services/user_service.dart';
+import '../services/api_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -56,7 +58,7 @@ class _ForgotPasswordScreenState
 
             TextField(
               controller: emailController,
-              decoration:const InputDecoration(
+              decoration: const InputDecoration(
                 labelText: "Email or Mobile Number",
                 prefixIcon: Icon(Icons.email),
                 border: OutlineInputBorder(),
@@ -69,8 +71,7 @@ class _ForgotPasswordScreenState
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: () {
-
+                onPressed: () async {
                   String input = emailController.text.trim();
 
                   bool isEmail = RegExp(
@@ -81,7 +82,7 @@ class _ForgotPasswordScreenState
                     r'^[0-9]{10}$',
                   ).hasMatch(input);
 
-                  if (emailController.text.isEmpty) {
+                  if (input.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
@@ -89,7 +90,10 @@ class _ForgotPasswordScreenState
                         ),
                       ),
                     );
-                  } else if (!isEmail && !isMobile) {
+                    return;
+                  }
+
+                  if (!isEmail && !isMobile) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
@@ -97,45 +101,71 @@ class _ForgotPasswordScreenState
                         ),
                       ),
                     );
-                  } else {
-                    final registeredUser = UserService.users.where(
-                          (user) =>
-                      user["email"] == input ||
-                          user["mobile"] == input,
-                    ).toList();
+                    return;
+                  }
 
-                    if (registeredUser.isEmpty) {
+                  try {
+                    final response = await http.post(
+                      Uri.parse(
+                        "${ApiService.baseUrl}/forgot-password",
+                      ),
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: jsonEncode({
+                        "identifier": input,
+                      }),
+                    );
+
+                    final responseData =
+                    jsonDecode(response.body);
+
+                    if (response.statusCode == 200) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
-                            "No registered account found with this Email or Mobile Number.",
+                            responseData["message"] ??
+                                "Account found. You can reset your password.",
                           ),
                         ),
                       );
-                      return;
-                    }
 
+                      Future.delayed(
+                        const Duration(seconds: 1),
+                            () {
+                          if (!mounted) return;
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ResetPasswordScreen(
+                                    userIdentifier: input,
+                                  ),
+                            ),
+                          );
+                        },
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            responseData["message"] ??
+                                "No registered account found.",
+                          ),
+                        ),
+                      );
+                    }
+                  } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(
-                          "Account found. You can reset your password.",
+                          "Unable to connect to the server. Please try again.",
                         ),
                       ),
                     );
-
-                    Future.delayed(const Duration(seconds: 1), () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => ResetPasswordScreen(
-                            userIdentifier: input,
-                          ),
-                        ),
-                      );
-                    });
                   }
                 },
-
                 child: const Text("Send Reset Link"),
               ),
             ),

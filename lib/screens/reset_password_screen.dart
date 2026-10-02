@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../services/user_service.dart';
+import 'package:http/http.dart' as http;
+import '../services/api_service.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String userIdentifier;
@@ -192,7 +194,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           Text("Please fill in all password fields."),
                         ),
                       );
-                    } else if (!(hasMinLength &&
+                      return;
+                    }
+
+                    if (!(hasMinLength &&
                         hasUppercase &&
                         hasLowercase &&
                         hasNumber &&
@@ -204,44 +209,74 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           ),
                         ),
                       );
-                    } else if (newPasswordController.text !=
+                      return;
+                    }
+
+                    if (newPasswordController.text !=
                         confirmPasswordController.text) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content:
-                          Text("Passwords do not match."),
+                          content: Text("Passwords do not match."),
                         ),
                       );
-                    } else {
-                      final userIndex = UserService.users.indexWhere(
-                            (user) =>
-                        user["email"] == widget.userIdentifier ||
-                            user["mobile"] == widget.userIdentifier,
+                      return;
+                    }
+
+                    try {
+                      final response = await http.post(
+                        Uri.parse(
+                          "${ApiService.baseUrl}/reset-password",
+                        ),
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: jsonEncode({
+                          "identifier": widget.userIdentifier,
+                          "new_password": newPasswordController.text,
+                        }),
                       );
 
-                      if (userIndex == -1) {
+                      final responseData = jsonDecode(response.body);
+
+                      if (response.statusCode == 200) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("User account not found."),
+                          SnackBar(
+                            content: Text(
+                              responseData["message"] ??
+                                  "Password reset successful.",
+                            ),
                           ),
                         );
-                        return;
+
+                        Future.delayed(
+                          const Duration(seconds: 2),
+                              () {
+                            if (!mounted) return;
+
+                            Navigator.popUntil(
+                              context,
+                                  (route) => route.isFirst,
+                            );
+                          },
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              responseData["message"] ??
+                                  "Password reset failed.",
+                            ),
+                          ),
+                        );
                       }
-
-                      UserService.users[userIndex]["password"] =
-                          newPasswordController.text;
-
-                      await UserService.saveUsers();
-
+                    } catch (e) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text("Password reset successfully."),
+                          content: Text(
+                            "Unable to connect to the server. Please try again.",
+                          ),
                         ),
                       );
-
-                      Future.delayed(const Duration(seconds: 2), () {
-                        Navigator.popUntil(context, (route) => route.isFirst);
-                      });
                     }
                   },
                 ),
